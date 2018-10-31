@@ -1,0 +1,185 @@
+Cuda9.1安装细则（LINUX）
+
+一、检测设备
+
+1.检查设备是否具有cuda安装条件
+
+2.检查GPU是否支持CUDA
+
+查看gpu版本信息：lspci | grep -i nvidia
+
+3.验证linux版本是否支持CUDA: uname -m && cat /etc/*release
+
+4.验证是否安装了gcc： gcc --version
+
+如果没有，在终端输入：sudo apt-get install gcc
+
+5.验证是否安装了kernel header和package development：
+
+1)uname -r
+
+2)sudo apt-get install linux-headers-$(uname -r)
+
+二、安装驱动
+
+1.有安装过驱动但是失败了需要卸载残留：sudo apt remove --purge nvidia*
+
+2.禁用nouveau驱动： lsmod | grep nouveau
+
+如果有输出，说明nouveau正在运行，则禁用：
+
+sudo vim /etc/modprobe.d/blacklist-nouveau.conf
+
+在刚刚打开的文件中添加如下两行内容：
+
+blacklist nouveau
+
+options nouveau modeset=0
+
+保存关闭文件，在终端执行： sudo update-initramfs -u
+
+3.再次查看nouveau是否禁用成功： lsmod | grep nouveau ,若无输出则禁用成功，若还有输出重启后在输入 ：lsmod | grep nouveau 。
+
+4.关闭图形化界面
+
+sudo service lightdm stop
+
+5.安装驱动
+
+a.APT安装
+
+1. 添加Graphic Drivers PPA
+
+sudo add-apt-repository ppa:graphics-drivers/ppa
+
+sudo apt-get update
+
+2.查看合适的版本
+
+ubuntu-drivers devices
+
+3.安装nvidia driver
+
+sudo apt-get install nvidia-390
+
+4.安装后，重启
+
+sudo reboot
+
+5.查看驱动安装结果
+
+sudo nvidia-smi
+
+sudo nvidia-setting
+
+b.runfile文件安装
+
+1.安装gcc-multilib
+
+sudo apt install gcc-multilib
+
+2.运行.run文件（可从NVIDIA官网下载）
+
+sudo sh NVIDIA-Linux***.run
+
+三、安装CUDA9.1
+
+1.下载cuda
+
+2.进入字符终端：Ctrl + Alt +F1
+
+3.关闭图形化界面： sudo service lightdm stop
+
+4.安装cuda： sudo sh cuda_9.1.85_387_linux.run
+
+5.安装提示里的“是否为NVIDIA安装驱动？”选择否，其他的都是默认
+
+6.安装结束后添加库：sudo apt-get install freeglut3-dev
+
+build-essential libx11-dev libxmu-dev libxi-dev libgl1-mesa-glx libglu1-mesa libglu1-mesa-dev
+
+（备注：这是一行命令）
+
+7.重启图形化界面： sudo service lightdm start，同时按住ctrl +alt+f7回到图形化界面。
+
+8.重启，检查Device Node Verification：
+
+sudo reboot
+
+ls /dev/nvidia*
+
+若结果显示：/dev/nvidia0 /dev/nvidiactl /dev/nvidia-uvm或者类似信息则安装成功，若结果是ls: cannot access/dev/nvidia*: No such file or directory或者是/dev/nvidia0 /dev/nvidiactl即文件显示不全。
+
+解决办法：1.sudo vim /etc/rc.local
+
+把第一行中的#!/bin/sh -e中的-e去掉，在#!/bin/sh和exit 0之间添加如下内容：
+
+/sbin/modprobe nvidia
+
+if [ "$?" -eq 0 ]; then
+
+#Count the number of NVIDIA controlls found
+
+NVDEVS='lspci | grep -i NVIDIA'
+
+N3D='echo "$NVDEVS" | grep "3D controller" | wc -l'
+
+NVGA='echo "$NVDEVS" | grep "VGA compatible controller" | wc -l'
+
+N='expr $N3D + $NVGA - 1'
+
+for i in 'seq 0 $N'; do
+
+mknod -m 666 /dev/nvidia$i c 195 $i
+
+done
+
+mknod -m 666 /dev/nvidiactl c 195 255
+
+esle
+
+exit 1
+
+fi
+
+/sbin/modprobe nvidia-uvm
+
+if [ "$?" -eq 0 ]; then
+
+#Find out the major device number used by the nvidia-uvm driver
+
+D='grep nvidia-uvm/proc/devices | awk '{print $1}''
+
+mknod -m 666 /dev/nvidia-uvm c $D 0
+
+else
+
+exit 1
+
+fi
+
+exit 0
+
+保存文件后重启，并在查看。
+
+9.设置环境变量（64位系统）：
+
+sudo vim /etc/profile
+
+export PATH=/usr/local/cuda-9.1/bin:$PATH
+
+export LD_LIBRARY_PATH=/usr/local/cuda-9.1/lib64:$LD_LIBRARY_PATH
+
+重启，并查看环境变量。
+
+10.验证驱动版本： cat /proc/driver/nvidia/version
+
+验证CUDA Toolikt：nvcc -V
+
+11.运行例子：cd /home/user_name/NVIDIA_CUDA-9.1_Samples
+
+make
+
+编译完成后：cd bin/x86_64/linux/release
+
+./deviceQuery 
