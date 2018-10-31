@@ -1,0 +1,62 @@
+=============================================================
+                      GETHUB
+@CREATE DATE: 22 AUG,2018
+@AUTHOR: HAILI
+
+=============================================================
+
+=====================local repository=======================
+1.github install
+	>> sudo apt-get install git
+
+2.config
+	>> git config --global user.name "your name"
+	>> git config --global user.email "email@example.com"
+
+3.create or delete a repository
+	>> git init
+	>> rm -rf .git
+
+4.add file
+	>> git add file.txt
+
+5.commit file
+	>> git commit -m "wrote the change of file"
+
+6.status of git
+	>> git status
+
+7.different compare whit after change
+	>> git diff filename
+
+8.log of git
+	>> git log
+	or >> git log --pretty=oneline
+
+9.back of git
+	>> git reset --hard HEAD^   (HEAD^^^^ back to 4th)
+	or >> git reset --hard HEAD~1  (HEAD~4 back to 4th)
+
+10 reflog
+	>> git reflog
+
+11.the difference of file in Workspace and version Library
+	>> git diff HEAD -- filename
+
+12.the file is changed or git add but don`t commit ,we can Revoke
+	>> git checkout -- filename
+
+13.delete
+	>> git rm filename
+	>> git commit -m " *** "
+======================remote repository==============================
+14.remote repository
+	>> git remote add origin https://github.com/lihailihai/Tensor_.git
+	>> git push -u origin master  (thr first time the "-u" is need)
+	>> git push origin master
+
+15.git clone
+	>>git clone https://github.com/lihailihai/Tensor_.git
+
+16.remote -v
+	>>git remote -v
