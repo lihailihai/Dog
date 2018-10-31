@@ -1,0 +1,600 @@
+Version=$(lsb_release -c --short)
+Codename=$(lsb_release -r --short)
+OSArch=$(uname -m)
+User=$(whoami)
+
+#设置sudo免密码
+echo "$(whoami) ALL=(ALL) NOPASSWD : ALL" | sudo tee /etc/sudoers.d/nopasswd4sudo 
+
+sudo sed -i 's/archive.ubuntu.com/mirrors.shu.edu.cn/g' /etc/apt/sources.list
+#配置镜像源及常用软件
+sudo mv /etc/apt/sources.list /etc/apt/sources.list.bak
+sudo tee -a /etc/apt/sources.list << EOF
+deb https://mirrors.shu.edu.cn/ubuntu/ $(lsb_release -c --short) main restricted universe multiverse
+deb-src https://mirrors.shu.edu.cn/ubuntu/ $(lsb_release -c --short) main restricted universe multiverse
+deb https://mirrors.shu.edu.cn/ubuntu/ $(lsb_release -c --short)-updates main restricted universe multiverse
+deb-src https://mirrors.shu.edu.cn/ubuntu/ $(lsb_release -c --short)-updates main restricted universe multiverse
+deb https://mirrors.shu.edu.cn/ubuntu/ $(lsb_release -c --short)-backports main restricted universe multiverse
+deb-src https://mirrors.shu.edu.cn/ubuntu/ $(lsb_release -c --short)-backports main restricted universe multiverse
+deb https://mirrors.shu.edu.cn/ubuntu/ $(lsb_release -c --short)-security main restricted universe multiverse
+deb-src https://mirrors.shu.edu.cn/ubuntu/ $(lsb_release -c --short)-security main restricted universe multiverse 
+EOF
+sudo apt update
+echo y | sudo apt install curl gcc g++ make python-pip python3 python3-pip vim speedometer htop language-pack-zh-hans wget tmux unzip zip rar unrar rinetd uuid openssh-server
+
+#配置Git的ppa源
+sudo tee -a /etc/apt/sources.list.d/git.list << EOF
+deb http://ppa.launchpad.net/git-core/ppa/ubuntu  $(lsb_release -c --short) main 
+deb-src http://ppa.launchpad.net/git-core/ppa/ubuntu  $(lsb_release -c --short) main 
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv E1DD270288B4E6030699E45FA1715D88E1DF1F24
+cd /etc/apt/sources.list.d/
+sudo sed -i 's/ppa.launchpad.net/ppa.luish.cc/' git.list
+sudo apt update
+sudo apt install git
+
+sudo add-apt-repository ppa:git-core/ppa
+sudo apt-get update
+echo y | sudo apt install git
+
+#配置pip镜像源
+mkdir ~/.pip
+tee ~/.pip/pip.conf << EOF
+[global]
+index-url=https://pypi.shuosc.org/simple
+[list]
+format=columns
+EOF
+sudo pip install -U pip
+sudo pip3 install -U pip
+
+
+#配置zerotier
+curl https://git.shuosc.org/snippets/3/raw | sudo sh
+
+
+#安装docker及配置daocloud加速
+sudo tee -a /etc/apt/sources.list.d/docker.list << EOF
+    deb [arch=amd64] https://mirrors.shu.edu.cn/docker-ce/linux/ubuntu/ xenial stable
+EOF
+sudo apt-key adv --keyserver=hkp://keyserver.ubuntu.com --recv 7EA0A9C3F273FCD8
+sudo apt update
+echo y | sudo apt install docker-ce
+sudo usermod -aG docker $(whoami)
+curl -sSL https://get.daocloud.io/daotools/set_mirror.sh | sh -s http://e85bc34e.m.daocloud.io
+sudo service docker restart
+
+#安装zsh
+echo y | sudo apt install zsh
+sh -c "$(curl -fsSL https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
+tee -a .zshrc << EOF
+setopt nonomatch
+EOF
+source .zshrc
+
+#安装搜狗输入法
+cd ~/Downloads
+wget -c http://ftp.shu.aixinwu.org/linuxsoftware/sogoupinyin_2.1.0.0082_amd64.deb
+echo y | sudo dpkg -i sogoupinyin_2.1.0.0082_amd64.deb
+sudo apt -f install
+
+#安装chrome浏览器
+sudo tee -a /etc/apt/sources.list.d/google-chrome.list << EOF
+deb https://dl.google.com/linux/chrome/deb/ stable main 
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 1397BC53640DB551
+sudo apt update
+sudo apt install google-chrome-stable
+
+#安装cuda(alt+f1)
+sudo apt-get install freeglut3-dev build-essential libx11-dev libxmu-dev libxi-dev libgl1-mesa-glx libglu1-mesa libglu1-mesa-dev 
+sudo apt install linux-source linux-headers-$(uname -r)
+sudo tee -a /etc/modprobe.d/blacklist-nouveau.conf << EOF
+blacklist nouveau
+options nouveau modeset=0
+EOF
+sudo update-initramfs -u
+lsmod | grep nouveau
+sudo apt-get install nvidia-384
+sudo apt-get install mesa-common-dev
+sudo apt-get install freeglut3-dev
+sudo reboot
+
+cd ~/Downloads
+wget -c http://ftp.shu.aixinwu.org/linuxsoftware/cuda_9.0.run
+sudo sh cuda.run --override
+sudo tee -a ~/.zshrc << EOF
+export PATH=/usr/local/cuda/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64$LD_LIBRARY_PATH
+EOF
+source ~/.zshrc
+
+sudo apt install nvidia-modprobe
+cd ~/Downloads
+wget -c http://ftp.shu.aixinwu.org/linuxsoftware/nvidia-docker_1.0.1-1_amd64.deb
+sudo dpkg -i nvidia-docker_1.0.1-1_amd64.deb
+
+docker pull tensorflow/tensorflow:latest-gpu-py3
+nvidia-docker run -it -d -v ./:/notebooks -p 18001:8888 tensorflow/tensorflow:latest-gpu-py3
+
+# 设置双网卡
+sudo route add -net 10.0.0.0/8 gw 10.0.3.254 dev eth1
+sudo route add -net 111.186.0.0/16 gw 10.0.3.254 dev eth1
+
+#禁用ipv6
+sudo tee -a /etc/sysctl.conf << EOF
+#disable IPv6
+net.ipv6.conf.all.disable_ipv6     = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6      = 1
+EOF
+sudo sysctl -p
+
+#挂载windows分区
+sudo blkid 查看uuid
+sudo vim /etc/fstab
+UUID=690AA70571133B35 /home/zhonger/data ntfs defaults 0 0
+
+#添加硬盘
+sudo fdisk /dev/md124
+sudo pvcreate /dev/md124p1
+sudo vgextend lab2-vg /dev/md124p1
+sudo lvcreate -n data -L +14.55T data-vg
+sudo lvextend -L +5.18T /dev/lab2-vg/root
+sudo resize2fs -p -F /dev/mapper/lab2-vg-root
+df -hTl
+
+#添加开机自启动程序
+gnome-session-properties
+
+#安装nextcloud客户端
+sudo tee -a /etc/apt/sources.list.d/nextcloud.list << EOF
+deb http://ppa.launchpad.net/nextcloud-devs/client/ubuntu $(lsb_release -c --short) main 
+deb-src http://ppa.launchpad.net/nextcloud-devs/client/ubuntu $(lsb_release -c --short) main 
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 1FCD77DD0DBEF5699AD2610160EE47FBAD3DD469
+sudo apt update 
+sudo apt install nextcloud-client
+
+#配置valet
+sudo tee -a /etc/apt/sources.list.d/php.list << EOF
+deb http://ppa.launchpad.net/ondrej/php/ubuntu $(lsb_release -c --short) main 
+deb-src http://ppa.launchpad.net/ondrej/php/ubuntu $(lsb_release -c --short) main 
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 14AA40EC0831756756D7F66C4F4EA0AAE5267A6C
+
+sudo tee -a /etc/apt/sources.list.d/nginx.list << EOF
+deb http://ppa.launchpad.net/nginx/stable/ubuntu $(lsb_release -c --short) main 
+deb-src http://ppa.launchpad.net/nginx/stable/ubuntu $(lsb_release -c --short) main 
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 8B3981E7A6852F782CC4951600A6F0A3C300EE8C
+
+sudo apt update
+echo y | sudo apt install libnss3-tools jq xsel 
+echo y | sudo apt install php7.1-cli php7.1-common php7.1-curl php7.1-json php7.1-mbstring php7.1-mcrypt php7.1-opcache php7.1-readline php7.1-xml php7.1-zip php7.1-sqlite3 php7.1-mysql php7.1-pgsql
+echo y | sudo apt install network-manager php7.1 php7.1-fpm nginx dnsmasq 
+
+wget https://getcomposer.org/composer.phar
+chmod +x composer.phar
+sudo mv composer.phar /usr/local/bin/composer
+composer config -g repo.packagist composer https://packagist.phpcomposer.com
+composer global require cpriego/valet-linux
+tee -a ~/.zshrc << EOF
+PATH=$PATH:/home/$(whoami)/.config/composer/vendor/bin
+EOF
+source ~/.zshrc
+valet install
+valet domain as
+
+#配置mysql和phpmyadmin
+echo y | sudo apt install mysql-server mycli
+wget -c https://files.phpmyadmin.net/phpMyAdmin/4.7.3/phpMyAdmin-4.7.3-all-languages.tar.gz
+mkdir -p ~/web/phpmyadmin
+tar zxf phpMyAdmin-4.7.3-all-languages.tar.gz -C ~/web/phpmyadmin
+cd ~/web/phpmyadmin
+mv phpMyAdmin-4.7.3-all-languages/* .
+rm -rf phpMyAdmin-4.7.3-all-languages
+mv config.sample.inc.php config.inc.php
+valet link db
+cd ~
+rm phpMyAdmin-4.7.3-all-languages.tar.gz
+
+#配置kvm
+sudo apt-get install qemu-kvm libvirt-bin virt-manager bridge-utils
+sudo apt install lxqt-openssh-askpass
+
+#配置virtualbox
+sudo tee -a /etc/apt/sources.list.d/virtualbox.list << EOF
+deb https://mirrors.tuna.tsinghua.edu.cn/virtualbox/apt $(lsb_release -c --short) contrib
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv A2F683C52980AECF
+sudo apt update 
+sudo apt install virtualbox
+
+#配置ipv6（/etc/rc.local）
+/bin/ping6 2001:da8:8006:126::1 -c 4
+
+#安装主题
+sudo apt install unity-tweak-tool
+
+mkdir .themes
+cd .themes
+wget –no-check-certificate https://github.com/anmoljagetia/Flatabulous/archive/master.zip
+unzip master
+
+sudo tee -a /etc/apt/sources.list.d/icon.list << EOF
+deb http://ppa.launchpad.net/noobslab/icons/ubuntu $(lsb_release -c --short) main 
+deb-src http://ppa.launchpad.net/noobslab/icons/ubuntu $(lsb_release -c --short) main 
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 4FA44A478284A18C1BA4A9CAD530E028F59EAE4D
+sudo apt update
+sudo apt install ultra-flat-icons ultra-flat-icons-orange ultra-flat-icons-green
+
+#安装shadowsocks
+sudo tee -a /etc/apt/sources.list.d/ss-qt5.list << EOF
+deb http://ppa.launchpad.net/hzwhuang/ss-qt5/ubuntu $(lsb_release -c --short) main 
+deb-src http://ppa.launchpad.net/hzwhuang/ss-qt5/ubuntu $(lsb_release -c --short) main 
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv C8A9395BF556323E82DDCB916DA746A05F00FA99
+sudo apt update
+echo y | sudo apt install shadowsocks-qt5
+
+#安装pritunl
+sudo tee -a /etc/apt/sources.list.d/pritunl.list << EOF
+deb https://mirrors.shu.edu.cn/pritunl/stable/apt xenial main
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 7568D9BB55FF9E5287D586017AE645C0CF8E292A
+sudo tee -a /etc/apt/sources.list.d/mongodb.list << EOF
+deb https://mirrors.shu.edu.cn/mongodb/apt/ubuntu xenial/mongodb-org/3.4 multiverse
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 0C49F3730359A14518585931BC711F9BA15703C6
+sudo apt update
+echo y |sudo apt install pritunl mongodb-org
+sudo systemctl start pritunl mongod
+sudo systemctl enable pritunl mongod
+sudo pritunl setup-key
+
+sudo apt-get install pritunl-client-gtk
+
+#安装vscode、brackets、sublime、atom、tor browser java
+sudo tee -a /etc/apt/sources.list.d/common.list << EOF
+deb http://ppa.launchpad.net/webupd8team/brackets/ubuntu  $(lsb_release -c --short) main
+deb-src http://ppa.launchpad.net/webupd8team/brackets/ubuntu  $(lsb_release -c --short) main
+deb http://ppa.launchpad.net/webupd8team/atom/ubuntu  $(lsb_release -c --short) main
+deb-src http://ppa.launchpad.net/webupd8team/atom/ubuntu  $(lsb_release -c --short) main
+deb http://ppa.launchpad.net/webupd8team/sublime-text-3/ubuntu  $(lsb_release -c --short) main
+deb-src http://ppa.launchpad.net/webupd8team/sublime-text-3/ubuntu  $(lsb_release -c --short) main
+deb http://ppa.launchpad.net/webupd8team/tor-browser/ubuntu  $(lsb_release -c --short) main
+deb-src http://ppa.launchpad.net/webupd8team/tor-browser/ubuntu  $(lsb_release -c --short) main
+deb http://ppa.launchpad.net/webupd8team/java/ubuntu  $(lsb_release -c --short) main
+deb-src http://ppa.launchpad.net/webupd8team/java/ubuntu  $(lsb_release -c --short) main
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 7B2C3B0889BF5709A105D03AC2518248EEA14886
+sudo apt update
+sudo apt install brackets sublime-text-installer atom tor-browser oracle-java9-installer
+sudo apt install maven
+
+#安装zabbix
+sudo tee -a /etc/apt/sources.list.d/zabbix.list << EOF
+deb https://mirrors.shu.edu.cn/zabbix/zabbix/3.2/ubuntu $(lsb_release -c --short) main
+deb-src https://mirrors.shu.edu.cn/zabbix/zabbix/3.2/ubuntu $(lsb_release -c --short) main
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 
+sudo apt update
+sudo apt install zabbix-agent
+
+#更新gcc
+sudo tee -a /etc/apt/sources.list.d/gcc.list << EOF
+deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu $(lsb_release -c --short) main
+deb-src http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu $(lsb_release -c --short) main
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 60C317803A41BA51845E371A1E9377A2BA9EF27F
+sudo apt update
+echo y | sudo apt install gcc gcc-6
+
+#配置gitlab ssh认证成功返回信息
+修改/home/git/gitlab-shell/lib/gitlab-shell.rb文件
+
+#安装nodejs
+curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.2/install.sh | bash
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" # This loads nvm
+tee -a ~/.zshrc << EOF
+NVM_NODEJS_ORG_MIRROR=http://npm.taobao.org/mirrors/node
+EOF
+source ~/.zshrc
+nvm install node
+npm install -g cnpm --registry=https://registry.npm.taobao.org
+cnpm config set registry https://registry.npm.shuosc.org
+cnpm install -g hexo-cli bower gulp grunt-cli gtop docsify
+
+#安装ruby
+gpg --keyserver hkp://pgp.mit.edu --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3 7D2BAF1CF37B13E2069D6956105BD0E739499BDB
+curl -sSL https://get.rvm.io | bash -s stable
+source ~/.rvm/scripts/rvm
+tee -a ~/.zshrc << EOF
+[[ -s "$HOME/.rvm/scripts/rvm" ]] && source "$HOME/.rvm/scripts/rvm" 
+EOF
+echo "ruby_url=https://mirrors.shu.edu.cn/ruby/ruby" > ~/.rvm/user/db
+rvm install ruby --disable-binary
+ruby -v
+gem sources  
+gem sources --remove https://rubygems.org/  
+gem sources -a https://mirrors.shu.edu.cn/rubygems/ 
+gem update --system
+gem -v
+gem install bundler rails
+bundle config mirror.https://rubygems.org https://mirrors.shu.edu.cn/rubygems/
+
+#安装go
+sudo apt-get install curl git mercurial make binutils bison gcc build-essential
+curl -s -S -L https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer | bash
+echo '[[ -s "$HOME/.gvm/scripts/gvm" ]] && source "$HOME/.gvm/scripts/gvm" ]]' >> .zshrc 
+source .zshrc
+sed -i 's/http:\/\/golang.org\/dl/https:\/\/go.luish.cc/g'  ~/.gvm/scripts/install
+sed -i 's/https:\/\/go.googlesource.com\/go/https:\/\/github.com\/golang\/go.git/g' ~/.gvm/scripts/listall
+gvm listall
+gvm install go1.9 -B
+gvm use go1.9 --default
+go version
+go get -u github.com/golang/dep/cmd/dep
+
+
+
+#安装redis
+sudo tee -a /etc/apt/sources.list.d/redis.list << EOF
+deb http://ppa.launchpad.net/chris-lea/redis-server/ubuntu   $(lsb_release -c --short) main 
+deb-src http://ppa.launchpad.net/chris-lea/redis-server/ubuntu   $(lsb_release -c --short) main 
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 136221EE520DDFAF0A905689B9316A7BC7917B12
+sudo apt update
+echo y | sudo apt install redis-server
+cd Downloads && wget -c http://ftp.shu.aixinwu.org/linuxsoftware/redis-desktop-manager_0.9.0.17_amd64.deb
+sudo dpkg -i redis-desktop-manager_0.9.0.17_amd64.deb
+sudo apt -f install
+
+#安装adobe flash
+sudo apt-get install pepperflashplugin-nonfree
+sudo update-pepperflashplugin-nonfree --install
+sudo update-pepperflashplugin-nonfree --status
+
+
+
+#修复dpkg:warning:files list file or
+#!/bin/bash
+set -e
+
+# Clean out /var/cache/apt/archives
+apt-get clean
+# Fill it with all the .debs we need
+apt-get --reinstall -dy install $(dpkg --get-selections | grep '[[:space:]]install' | cut -f1)
+
+DIR=$(mktemp -d -t info-XXXXXX)
+for deb in /var/cache/apt/archives/*.deb
+do
+    # Move to working directory
+    cd "$DIR"
+    # Create DEBIAN directory
+    mkdir -p DEBIAN
+    # Extract control files
+    dpkg-deb -e "$deb"
+    # Extract file list, fixing up the leading ./ and turning / into /.
+    dpkg-deb -c "$deb" | awk '{print $NF}' | cut -c2- | sed -e 's/^\/$/\/./' > DEBIAN/list
+    # Figure out binary package name
+    DEB=$(basename "$deb" | cut -d_ -f1)
+    # Copy each control file into place
+    cd DEBIAN
+    for file in *
+    do
+        cp -a "$file" /var/lib/dpkg/info/"$DEB"."$file"
+    done
+    # Clean up
+    cd ..
+    rm -rf DEBIAN
+done
+rmdir "$DIR"
+
+#sks-keyserver
+apt-get -y install gcc ocaml libdb-dev gnupg nginx wget build-essential g++
+gpg --keyserver hkp://pgp.mit.edu --trust-model always --recv-key 0x0B7F8B60E3EDFAE3
+wget http://ftp.shu.aixinwu.org/linuxsoftware/sks-1.1.6.tgz
+wget http://ftp.shu.aixinwu.org/linuxsoftware/sks-1.1.6.tgz.asc
+gpg --keyid-format long --verify sks-1.1.6.tgz.asc
+tar -xzf sks-1.1.6.tgz
+cd sks-1.1.6
+cp Makefile.local.unused Makefile.local
+sed -i 's/ldb\-4.6/ldb\-5.3/' Makefile.local
+make dep
+apt-get install zlib1g zlib1g-dev
+make all
+make install
+
+#NFS服务器
+sudo ufw disable
+sudo apt-get install nfs-kernel-server
+mkdir /home/daysmark/nfsdir
+打开/etc/exports文件，在末尾加入：/home/daysmark/nfsdir 172.22.0.0/16(rw,sync,no_root_squash,no_subtree_check)
+sudo apt-get install nfs-common
+sudo service rpcbind restart
+sudo service nfs-kernel-server restart
+sudo service nfs-kernel-server status
+sudo mount -t nfs 172.22.107.33:/home/daysmark/nfsdir /mnt
+sudo umount /mnt
+修改为同一用户可以在多机之间同时无障碍使用nfs共享文件夹
+
+#镜像
+rsync -avz --delete --safe-links rsync.apache.org::apache-dist /path/to/mirror
+rsync -avz --delete --safe-links mirror.math.princeton.edu::pub/putty nfs/rsync/
+rsync -e "ssh -i /home/mirror/.ssh/id_rsa" -rtlzv --delete cran-rsync@cran.r-project.org: /home/mirror/rsync/cran/
+wget -P /home/mirror/wget -c -r -np -k -L -p -e robots=off http://nodejs.org
+wget -P /home/mirror/wget -m -c -np -e robots=off http://download.virtualbox.org/virtualbox/
+wget -P /home/mirror/wget -m -e robots=off -U "Mozilla/5.0 (Windows; U; Windows NT 5.1; zh-CN; rv:1.9.1.6) Gecko/20091201 Firefox/3.5.6" https://download.docker.com
+find -type f | grep '\.[0-9]*$' | xargs rm
+find /home/mirror/wget/ -type f | grep '\.[0-9]*$\|.html\|index.html*' | xargs rm
+find /home/mirror/wget/ -regex '.*\.[0-9]\|.*\.html' -print -exec rm -f {} \;
+
+#vsftp
+修改/etc/vsftpd/vsftpd.conf
+anonymous_enable=YES
+local_enable=YES
+local_umask=022
+connect_from_port_20=NO
+ftpd_banner=Welcome to Shanghai University Open Source Mirror Site.
+listen=YES
+pam_service_name=vsftpd
+userlist_enable=YES
+tcp_wrappers=YES
+use_localtime=YES
+no_anon_password=YES
+idle_session_timeout=600
+userlist_deny=NO
+pasv_enable=YES
+pasv_min_port=5000
+pasv_max_port=5010
+pasv_address=202.121.199.235
+pasv_addr_resolve=YES
+accept_timeout=60
+connect_timeout=60
+anon_root=/var/www/ftp
+
+挂载文件到anon的root目录下（使用sudo权限）
+mount --bind /home/mirror/rsync/apache apache
+
+#挂载NTFS硬盘到Linux
+sudo blkid 查看UUID
+往`/etc/fstab`文件添加一行：
+UUID=690AA70571133B35 /home/zhonger/data ntfs defaults 0 0
+sudo ntfsfix /dev/sda2
+
+#安装lyx（latex编辑）
+sudo add-apt-repository ppa:lyx-devel/release
+sudo apt-get update
+sudo apt install lyx
+
+#安装Stack-client
+echo 'deb http://mirror.transip.net/stack/software/deb/Ubuntu_16.04/ ./' | sudo tee /etc/apt/sources.list.d/stack-client.list
+sudo apt update
+sudo apt install stack-client
+
+#安装sbt
+echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
+sudo apt-get update
+sudo apt-get install sbt
+
+#安装s3fs及挂载minio
+sudo apt-get install automake autotools-dev fuse g++ git libcurl4-gnutls-dev libfuse-dev libssl-dev libxml2-dev make pkg-config
+git clone https://github.com/s3fs-fuse/s3fs-fuse.git
+cd s3fs-fuse
+./autogen.sh
+./configure
+make
+sudo make install
+echo MYIDENTITY:MYCREDENTIAL > /path/to/passwd
+chmod 600 /path/to/passwd
+s3fs <bucket> /s3 -o passwd_file=/path/to/passwd,use_path_request_style,url=http://minio-server:9000,rw,uid=1000,gid=1000
+sudo umount /s3
+
+#申请微软outlook邮箱别名，如live.com、live.cn等（http://51.ruyo.net/p/1327.html）
+var sub = window.prompt('输入域名，支持live.com/msn.com/live.cn等等...\r\n更多后缀请访问：http://51.ruyo.net/p/3194.html\r\n直接点击取消即可前往\n','live.com');if(sub){document.getElementById("SingleDomain").value = sub;document.getElementById("idSingleDomain").innerText = "@"+sub;}else{window.open("http://51.ruyo.net/p/3194.html")};
+
+#ubuntu面板无声音
+sudo tee -a /etc/pulse/default.pa << EOF
+set-sink-port 0 analog-output-headphones
+EOF
+
+sudo apt install pavucontrol
+pavucontrol
+
+#安装bluemix和kubernetes-cli
+wget -C ~/Downloads http://public.dhe.ibm.com/cloud/bluemix/cli/bluemix-cli/Bluemix_CLI_0.5.6_amd64.tar.gz
+cd ～/Downloads && tar zxf Bluemix_CLI_0.5.6_amd64.tar.gz
+cd Bluemix_CLI && sudo ./install_bluemix_cli
+
+curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.7.0/bin/linux/amd64/kubectl
+chmod +x kubectl
+sudo chown root:root kubectl
+sudo mv kubectl /usr/bin
+
+bx plugin install container-service -r Bluemix
+bx login -a https://api.au-syd.bluemix.net
+bx cs init
+bx cs cluster-config mycluster
+export KUBECONFIG=/home/zhonger/.bluemix/plugins/container-service/clusters/mycluster/kube-config-mel01-mycluster.yml
+kubectl get nodes
+kubectl proxy   (visit http://127.0.0.1:8001/ui)
+
+#修改gitlab用户密码
+bundle exec rails console production
+u = User.where(email: 'admin@localhost').first
+u.password='password'
+u.save!
+
+#用iptables实现端口转发
+iptables -t nat -A PREROUTING --dst 172.22.107.37 -p tcp --dport 10080 -j DNAT --to-destination 172.22.107.35:10080
+iptables -t nat -A POSTROUTING --dst 172.22.107.35 -p tcp --dport 10080 -j SNAT --to-source 172.22.107.37
+service iptables save
+
+#gitlab-ci-runner
+docker run -d --name gitlab-runner --restart always \
+  -v /srv/gitlab-runner/config:/etc/gitlab-runner \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  gitlab/gitlab-runner:latest
+docker exec -it gitlab-runner gitlab-runner register
+#update gitlab-ci-runner
+docker pull gitlab/gitlab-runner:latest
+
+#zabbix
+docker run -d -v /home/zabbix/mysql --name zabbix-db-storage busybox:latest
+
+docker run \
+    -d \
+    --name zabbix-db \
+    -v /home/zabbix/backups:/backups \
+    -v /etc/localtime:/etc/localtime:ro \
+    --volumes-from zabbix-db-storage \
+    --env="MARIADB_USER=zabbix" \
+    --env="MARIADB_PASS=zabbix" \
+    zabbix/zabbix-db-mariadb
+
+    docker run \
+    -d \
+    --name zabbix \
+    -p 8008:80 \
+    -p 10051:10051 \
+    -v /etc/localtime:/etc/localtime:ro \
+    --link zabbix-db:zabbix.db \
+    --env="ZS_DBHost=zabbix.db" \
+    --env="ZS_DBUser=zabbix" \
+    --env="ZS_DBPassword=zabbix" \
+    monitoringartist/zabbix-3.0-xxl
+    
+#onlyoffice
+docker run -ti -d -p 2080:80 onlyoffice/documentserver
+
+#不同宿主机中的虚拟机互通
+sudo tee -a /etc/sysctl.conf >> EOF
+net.ipv4.ip_forward=1
+EOF
+sudo sysctl -p
+sudo iptables -F
+sudo route add -net 192.168.107.0/24 gw 10.0.0.7 dev rename3 (lab3)
+sudo route add -net 192.168.103.0/24 gw 10.0.0.3 dev eno2 (lab7)
+
+# 防止虚拟机登录宿主机以及非管理ip登录
+sudo iptables -A INPUT -p tcp -s 10.0.0.0/24 --dport 22 -j ACCEPT
+sudo iptables -A INPUT -p tcp -s 172.22.0.0/16 --dport 22 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 22 -j DROP
+
+sudo tee -a /etc/network/if-pre-up.d/iptables >> EOF
+iptables -F
+EOF
+sudo chmod +x /etc/network/if-pre-up.d/iptables
+
+#weechat
+sudo tee -a /etc/apt/sources.list.d/weechat.list << EOF
+deb https://weechat.org/ubuntu $(lsb_release -c --short) main 
+EOF
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv D1820DB22A11534E
+sudo apt update
+sudo apt install weechat
