@@ -52,7 +52,7 @@
 ======================remote repository==============================
 14.remote repository
 	>> git remote add origin https://github.com/lihailihai/Tensor_.git
-	>> git push -u origin master  (thr first time the "-u" is need)
+	>> git push -u origin master  (th first time the "-u" is need)
 	>> git push origin master
 
 15.git clone
